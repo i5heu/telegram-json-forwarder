@@ -82,31 +82,36 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatTimingData(timingData map[string]interface{}) string {
-	ms := func(x interface{}) float64 {
-		return x.(float64) / 1e3
-	}
+	// Start from navigationStart
+	navigationStart := timingData["navigationStart"].(float64)
 
-	// Calculate differences between relevant timing events
 	calculatedTimes := map[string]float64{
-		"DNS Lookup":        ms(timingData["domainLookupEnd"]) - ms(timingData["domainLookupStart"]),
-		"TCP Connection":    ms(timingData["connectEnd"]) - ms(timingData["connectStart"]),
-		"SSL Handshake":     ms(timingData["connectEnd"]) - ms(timingData["secureConnectionStart"]),
-		"Request Sent":      ms(timingData["responseStart"]) - ms(timingData["requestStart"]),
-		"Response Received": ms(timingData["responseEnd"]) - ms(timingData["responseStart"]),
-		"DOM Processing":    ms(timingData["domComplete"]) - ms(timingData["domLoading"]),
-		"Load Event":        ms(timingData["loadEventEnd"]) - ms(timingData["loadEventStart"]),
-		"AppCache":          ms(timingData["domainLookupStart"]) - ms(timingData["fetchStart"]),
-		"Redirect":          ms(timingData["redirectEnd"]) - ms(timingData["redirectStart"]),
+		"Redirect":          timingData["redirectEnd"].(float64) - timingData["redirectStart"].(float64),
+		"AppCache":          timingData["domainLookupStart"].(float64) - timingData["fetchStart"].(float64),
+		"DNS Lookup":        timingData["domainLookupEnd"].(float64) - timingData["domainLookupStart"].(float64),
+		"TCP Connection":    timingData["connectEnd"].(float64) - timingData["connectStart"].(float64),
+		"SSL Handshake":     timingData["connectEnd"].(float64) - timingData["secureConnectionStart"].(float64),
+		"Request Sent":      timingData["responseStart"].(float64) - timingData["requestStart"].(float64),
+		"Response Received": timingData["responseEnd"].(float64) - timingData["responseStart"].(float64),
+		"DOM Processing":    timingData["domComplete"].(float64) - timingData["domLoading"].(float64),
+		"Load Event":        timingData["loadEventEnd"].(float64) - timingData["loadEventStart"].(float64),
+		"DOMContentLoaded":  timingData["domContentLoadedEventEnd"].(float64) - navigationStart,
+		"Finish":            timingData["loadEventEnd"].(float64) - navigationStart,
 	}
 
-	formatted := "*Timing Events (in ms):*\n"
+	// Create a waterfall-like output
+	waterfall := "*Waterfall Timing (in ms):*\n"
 	for key, value := range calculatedTimes {
-		// Only show events where the duration is greater than 0
 		if value > 0 {
-			formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, value)
+			waterfall += fmt.Sprintf("*%s:* %.2f ms\n", key, value)
 		}
 	}
-	return formatted
+
+	// Final DOM loading time from navigation start to domLoading
+	domLoadingTime := timingData["domLoading"].(float64) - navigationStart
+	waterfall += fmt.Sprintf("\n*DOM Loading Time:* %.2f ms\n", domLoadingTime)
+
+	return waterfall
 }
 
 func sendToTelegram(data map[string]interface{}) error {
