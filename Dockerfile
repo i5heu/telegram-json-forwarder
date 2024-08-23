@@ -7,7 +7,7 @@ COPY go.mod ./
 RUN go mod tidy && go mod verify
 
 COPY . .
-RUN go build -v -o server ./cmd/server/main.go
+RUN go build -v -o server ./main.go
 
 EXPOSE 80
 EXPOSE 53
