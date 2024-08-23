@@ -10,9 +10,10 @@ import (
 	"os"
 )
 
-// Get environment variables for Telegram Bot Token and Chat ID
+// Get environment variables for Telegram Bot Token, Chat ID, and Allowed CORS Domain
 var TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
 var TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
+var AllowedCORSOrigin = os.Getenv("ALLOWED_CORS_ORIGIN")
 
 func main() {
 	// Check if the required environment variables are set
@@ -20,13 +21,32 @@ func main() {
 		log.Fatal("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set as environment variables")
 	}
 
-	http.HandleFunc("/webhook", webhookHandler)
-	http.HandleFunc("/", ok)
+	http.HandleFunc("/webhook", corsMiddleware(webhookHandler))
+	http.HandleFunc("/", corsMiddleware(ok))
 
 	// Start the server on port 80
 	log.Println("Starting server on :80")
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		log.Fatalf("Could not start server: %s\n", err.Error())
+	}
+}
+
+// CORS Middleware to add CORS headers
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if AllowedCORSOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", AllowedCORSOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
+
+		// Handle preflight OPTIONS request
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	}
 }
 
