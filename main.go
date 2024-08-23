@@ -21,12 +21,18 @@ func main() {
 	}
 
 	http.HandleFunc("/webhook", webhookHandler)
+	http.HandleFunc("/", ok)
 
 	// Start the server on port 80
 	log.Println("Starting server on :80")
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		log.Fatalf("Could not start server: %s\n", err.Error())
 	}
+}
+
+func ok(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "OK")
 }
 
 func webhookHandler(w http.ResponseWriter, r *http.Request) {
@@ -49,12 +55,13 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := sendToTelegram(data); err != nil {
-		http.Error(w, "Could not send message to Telegram", http.StatusInternalServerError)
+		log.Printf("Error sending message to Telegram: %s\n", err.Error())
+		http.Error(w, "Error", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Message forwarded to Telegram successfully")
+	fmt.Fprintln(w, "OK")
 }
 
 func sendToTelegram(data map[string]interface{}) error {
