@@ -2,7 +2,7 @@ FROM docker.io/golang:latest
 
 WORKDIR /usr/src/app
 
-COPY go.mod go.sum ./
+COPY go.mod ./
 
 RUN go mod tidy && go mod verify
 
