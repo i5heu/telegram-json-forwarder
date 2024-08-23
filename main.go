@@ -11,13 +11,11 @@ import (
 	"strings"
 )
 
-// Get environment variables for Telegram Bot Token, Chat ID, and Allowed CORS Domain
 var TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
 var TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
 var AllowedCORSOrigin = os.Getenv("ALLOWED_CORS_ORIGIN")
 
 func main() {
-	// Check if the required environment variables are set
 	if TelegramBotToken == "" || TelegramChatID == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set as environment variables")
 	}
@@ -25,25 +23,21 @@ func main() {
 	http.HandleFunc("/webhook", corsMiddleware(webhookHandler))
 	http.HandleFunc("/", corsMiddleware(ok))
 
-	// Start the server on port 80
 	log.Println("Starting server on :80")
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		log.Fatalf("Could not start server: %s\n", err.Error())
 	}
 }
 
-// CORS Middleware to add CORS headers
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers only if AllowedCORSOrigin is set
 		if AllowedCORSOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", AllowedCORSOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
-			w.Header().Set("Access-Control-Allow-Credentials", "true") // Allow credentials
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
-		// Handle preflight OPTIONS request
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -88,30 +82,27 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatTimingData(timingData map[string]interface{}) string {
-	formatted := ""
-	for key, value := range timingData {
-		if num, ok := value.(float64); ok {
-			formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, num/1e6) // convert nanoseconds to milliseconds
-		} else {
-			formatted += fmt.Sprintf("*%s:* %v\n", key, value)
-		}
+	// Convert the timing data from nanoseconds to milliseconds
+	ms := func(x interface{}) float64 {
+		return x.(float64) / 1e3
 	}
-	return formatted
-}
 
-func formatResourcesData(resourcesData []interface{}) string {
-	formatted := ""
-	for _, resource := range resourcesData {
-		if resourceMap, ok := resource.(map[string]interface{}); ok {
-			for key, value := range resourceMap {
-				if num, ok := value.(float64); ok {
-					formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, num/1e3) // convert microseconds to milliseconds
-				} else {
-					formatted += fmt.Sprintf("*%s:* %v\n", key, value)
-				}
-			}
-			formatted += "\n"
-		}
+	// Calculate differences between relevant timing events
+	calculatedTimes := map[string]float64{
+		"Redirect":          ms(timingData["redirectEnd"]) - ms(timingData["redirectStart"]),
+		"AppCache":          ms(timingData["domainLookupStart"]) - ms(timingData["fetchStart"]),
+		"DNS Lookup":        ms(timingData["domainLookupEnd"]) - ms(timingData["domainLookupStart"]),
+		"TCP Connection":    ms(timingData["connectEnd"]) - ms(timingData["connectStart"]),
+		"SSL Handshake":     ms(timingData["connectEnd"]) - ms(timingData["secureConnectionStart"]),
+		"Request Sent":      ms(timingData["responseStart"]) - ms(timingData["requestStart"]),
+		"Response Received": ms(timingData["responseEnd"]) - ms(timingData["responseStart"]),
+		"DOM Processing":    ms(timingData["domComplete"]) - ms(timingData["domLoading"]),
+		"Load Event":        ms(timingData["loadEventEnd"]) - ms(timingData["loadEventStart"]),
+	}
+
+	formatted := "*Timing Events (in ms):*\n"
+	for key, value := range calculatedTimes {
+		formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, value)
 	}
 	return formatted
 }
@@ -124,27 +115,19 @@ func sendToTelegram(data map[string]interface{}) error {
 		switch key {
 		case "timing":
 			if timingMap, ok := value.(map[string]interface{}); ok {
-				message.WriteString("*Timing:*\n")
 				message.WriteString(formatTimingData(timingMap))
-			}
-		case "resources":
-			if resourcesArray, ok := value.([]interface{}); ok {
-				message.WriteString("*Resources:*\n")
-				message.WriteString(formatResourcesData(resourcesArray))
 			}
 		default:
 			message.WriteString(fmt.Sprintf("*%s:* %v\n", key, value))
 		}
 	}
 
-	// Telegram API URL
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", TelegramBotToken)
 
-	// Create a map to hold the message payload
 	payload := map[string]string{
 		"chat_id":    TelegramChatID,
 		"text":       message.String(),
-		"parse_mode": "Markdown", // To format the text with bold etc.
+		"parse_mode": "Markdown",
 	}
 
 	payloadBytes, err := json.Marshal(payload)
