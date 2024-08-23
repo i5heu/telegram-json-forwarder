@@ -10,6 +10,5 @@ COPY . .
 RUN go build -v -o server ./main.go
 
 EXPOSE 80
-EXPOSE 53
 
 CMD ["/usr/src/app/server"]
