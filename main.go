@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // Get environment variables for Telegram Bot Token, Chat ID, and Allowed CORS Domain
@@ -38,14 +39,14 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if AllowedCORSOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", AllowedCORSOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
 			w.Header().Set("Access-Control-Allow-Credentials", "true") // Allow credentials
+		}
 
-			// Handle preflight OPTIONS request
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
+		// Handle preflight OPTIONS request
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 
 		next.ServeHTTP(w, r)
@@ -86,11 +87,54 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "OK")
 }
 
+func formatTimingData(timingData map[string]interface{}) string {
+	formatted := ""
+	for key, value := range timingData {
+		if num, ok := value.(float64); ok {
+			formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, num/1e6) // convert nanoseconds to milliseconds
+		} else {
+			formatted += fmt.Sprintf("*%s:* %v\n", key, value)
+		}
+	}
+	return formatted
+}
+
+func formatResourcesData(resourcesData []interface{}) string {
+	formatted := ""
+	for _, resource := range resourcesData {
+		if resourceMap, ok := resource.(map[string]interface{}); ok {
+			for key, value := range resourceMap {
+				if num, ok := value.(float64); ok {
+					formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, num/1e3) // convert microseconds to milliseconds
+				} else {
+					formatted += fmt.Sprintf("*%s:* %v\n", key, value)
+				}
+			}
+			formatted += "\n"
+		}
+	}
+	return formatted
+}
+
 func sendToTelegram(data map[string]interface{}) error {
-	message := "*Received message:*\n"
+	var message strings.Builder
+	message.WriteString("*Received message:*\n\n")
 
 	for key, value := range data {
-		message += fmt.Sprintf("*%s:* %v\n", key, value)
+		switch key {
+		case "timing":
+			if timingMap, ok := value.(map[string]interface{}); ok {
+				message.WriteString("*Timing:*\n")
+				message.WriteString(formatTimingData(timingMap))
+			}
+		case "resources":
+			if resourcesArray, ok := value.([]interface{}); ok {
+				message.WriteString("*Resources:*\n")
+				message.WriteString(formatResourcesData(resourcesArray))
+			}
+		default:
+			message.WriteString(fmt.Sprintf("*%s:* %v\n", key, value))
+		}
 	}
 
 	// Telegram API URL
@@ -99,7 +143,7 @@ func sendToTelegram(data map[string]interface{}) error {
 	// Create a map to hold the message payload
 	payload := map[string]string{
 		"chat_id":    TelegramChatID,
-		"text":       message,
+		"text":       message.String(),
 		"parse_mode": "Markdown", // To format the text with bold etc.
 	}
 
