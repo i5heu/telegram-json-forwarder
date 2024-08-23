@@ -82,15 +82,12 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatTimingData(timingData map[string]interface{}) string {
-	// Convert the timing data from nanoseconds to milliseconds
 	ms := func(x interface{}) float64 {
 		return x.(float64) / 1e3
 	}
 
 	// Calculate differences between relevant timing events
 	calculatedTimes := map[string]float64{
-		"Redirect":          ms(timingData["redirectEnd"]) - ms(timingData["redirectStart"]),
-		"AppCache":          ms(timingData["domainLookupStart"]) - ms(timingData["fetchStart"]),
 		"DNS Lookup":        ms(timingData["domainLookupEnd"]) - ms(timingData["domainLookupStart"]),
 		"TCP Connection":    ms(timingData["connectEnd"]) - ms(timingData["connectStart"]),
 		"SSL Handshake":     ms(timingData["connectEnd"]) - ms(timingData["secureConnectionStart"]),
@@ -98,11 +95,16 @@ func formatTimingData(timingData map[string]interface{}) string {
 		"Response Received": ms(timingData["responseEnd"]) - ms(timingData["responseStart"]),
 		"DOM Processing":    ms(timingData["domComplete"]) - ms(timingData["domLoading"]),
 		"Load Event":        ms(timingData["loadEventEnd"]) - ms(timingData["loadEventStart"]),
+		"AppCache":          ms(timingData["domainLookupStart"]) - ms(timingData["fetchStart"]),
+		"Redirect":          ms(timingData["redirectEnd"]) - ms(timingData["redirectStart"]),
 	}
 
 	formatted := "*Timing Events (in ms):*\n"
 	for key, value := range calculatedTimes {
-		formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, value)
+		// Only show events where the duration is greater than 0
+		if value > 0 {
+			formatted += fmt.Sprintf("*%s:* %.2f ms\n", key, value)
+		}
 	}
 	return formatted
 }
